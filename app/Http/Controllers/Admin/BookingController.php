@@ -16,8 +16,8 @@ class BookingController extends Controller
     {
         $booking = Booking::findOrFail($id);
         $booking->update([
-            'payment_status' => 'approved'
-        ]);
+    'payment_status' => 'approved'
+]);
 
         return back();
     }

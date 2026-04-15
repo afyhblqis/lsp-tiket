@@ -37,4 +37,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/admin/bookings', [AdminBookingController::class, 'index']);
     Route::get('/admin/bookings/approve/{id}', [AdminBookingController::class, 'approve']);
     Route::get('/admin/bookings/reject/{id}', [AdminBookingController::class, 'reject']);
+
+    // dialihkan ke pembayaran
+    Route::get('/payment/{id}', [BookingController::class, 'payment'])->name('payment.show');
+    Route::post('/payment/{id}', [BookingController::class, 'uploadPayment'])->name('payment.upload');
+    Route::get('/booking-user/{id}', [BookingController::class, 'detail'])->name('booking.detail');
 });

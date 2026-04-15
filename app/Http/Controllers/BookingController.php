@@ -6,90 +6,88 @@ use App\Models\Booking;
 use Illuminate\Http\Request;
 use App\Models\Schedule;
 use Illuminate\Support\Facades\Auth;
-use function Symfony\Component\String\u;
-
 
 class BookingController extends Controller
 {
     // Menampilkan halaman detail sebelum memesan
-   public function show($id)
+    public function show($id)
     {
-    $schedule = Schedule::findOrFail($id); // FIX (tanpa S)
+        $schedule = Schedule::findOrFail($id);
         return view("user.booking_detail", compact('schedule'));
-}
+    }
+
     // Memproses pesanan ke database
     public function store(Request $request, $id)
     {
-    $schedule = Schedule::findOrFail($id);
+        $schedule = Schedule::findOrFail($id);
 
-    $request->validate([
-        'total_seats' => 'required|integer|min:1',
-        'payment_method' => 'required',
-        'payment_proof' => 'required|image|mimes:jpg,jpeg,png|max:2048'
-    ]);
+        $request->validate([
+            'total_seats' => 'required|integer|min:1',
+        ]);
 
-    $total_price = $request->total_seats * $schedule->price;
+        $total_price = $request->total_seats * $schedule->price;
 
-    // Upload file
-    $file = $request->file('payment_proof');
-    $filename = time() . '.' . $file->getClientOriginalExtension();
-    $file->move(public_path('uploads'), $filename);
+        $booking = Booking::create([
+            'user_id' => Auth::id(),
+            'schedule_id' => $schedule->id,
+            'total_seats' => $request->total_seats,
+            'total_price' => $total_price,
+            'status' => 'pending'
+        ]);
 
-    Booking::create([
-        'user_id' => Auth::id(),
-        'schedule_id' => $schedule->id,
-        'total_seats' => $request->total_seats,
-        'total_price' => $total_price,
-        'status' => 'Lunas',
-        'payment_method' => $request->payment_method,
-        'payment_proof' => $filename,
-        'payment_status' => 'pending'
-    ]);
+        // kurangi stok
+        $schedule->decrement('stock', $request->total_seats);
 
-    $schedule->decrement('stock', $request->total_seats);
+        // redirect ke halaman pembayaran
+        return redirect()->route('payment.show', $booking->id);
+    }
 
-    return redirect('/history');
-}
+    // ✅ TAMBAHAN BARU (HALAMAN PAYMENT)
+    public function payment($id)
+    {
+        $booking = Booking::with('schedule')->findOrFail($id);
+        return view('user.booking_user', compact('booking'));
+    }
 
-    //Menampilknan riwayat pemesanan
+    // Menampilkan riwayat
     public function history()
     {
         $orders = Booking::where('user_id', Auth::id())
-        ->with('schedule')
-        ->latest()
-        ->get();
+            ->with('schedule')
+            ->latest()
+            ->get();
 
         return view('user.history', compact('orders'));
-
     }
 
-public function detail($id)
-{
-    $booking = Booking::with('schedule')->findOrFail($id);
+    // Halaman detail setelah pembayaran
+    public function detail($id)
+    {
+        $booking = Booking::with('schedule')->findOrFail($id);
+        return view('user.booking_result', compact('booking'));
+    }
 
-    return view('user.booking_user', compact('booking'));
-}
-
+    // Upload bukti pembayaran
     public function uploadPayment(Request $request, $id)
     {
-    $booking = Booking::findOrFail($id);
+        $booking = Booking::findOrFail($id);
 
-    $request->validate([
-        'payment_proof' => 'required|image|mimes:jpg,jpeg,png|max:2048'
-    ]);
+        $request->validate([
+            'payment_method' => 'required',
+            'payment_proof' => 'required|image|mimes:jpg,jpeg,png|max:2048'
+        ]);
 
-    $file = $request->file('payment_proof');
-    $filename = time() . '.' . $file->getClientOriginalExtension();
-    $file->move(public_path('uploads'), $filename);
+        $file = $request->file('payment_proof');
+        $filename = time() . '.' . $file->getClientOriginalExtension();
+        $file->move(public_path('uploads'), $filename);
 
-    $booking->update([
-        'payment_proof' => $filename,
-        'payment_status' => 'pending'
-    ]);
+        $booking->update([
+            'payment_method' => $request->payment_method,
+            'payment_proof' => $filename,
+            'payment_status' => 'waiting_verification'
+        ]);
 
-    return back();
+        return redirect()->route('booking.detail', $booking->id)
+            ->with('success', 'Bukti pembayaran berhasil dikirim');
     }
-
-
 }
-
